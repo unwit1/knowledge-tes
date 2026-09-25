@@ -1,0 +1,133 @@
+name: One-shot TES knowledge migration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tes-full-migration.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout knowledge-tes
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pinned Agent OS source
+        uses: actions/checkout@v4
+        with:
+          repository: unwit1/personal-agent-os
+          ref: a84d5adf3f7e21a89943c023620a81361cc2f85c
+          path: _agent_os
+
+      - name: Copy Elder Scrolls library
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="_agent_os/knowledge/libraries/elder-scrolls"
+
+          # Preserve the knowledge-tes repository README, while retaining the
+          # original library README in migrations for provenance.
+          mkdir -p migrations
+          cp "$SRC/README.md" migrations/source-library-README.md
+
+          for entry in "$SRC"/*; do
+            name="$(basename "$entry")"
+            if [ "$name" = "README.md" ]; then
+              continue
+            fi
+            rm -rf "./$name"
+            cp -a "$entry" "./$name"
+          done
+
+      - name: Audit copied content before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="_agent_os/knowledge/libraries/elder-scrolls"
+          REPORT="migrations/2026-09-25-full-copy-audit.md"
+
+          src_manifest="$(mktemp)"
+          dst_manifest="$(mktemp)"
+
+          (
+            cd "$SRC"
+            find . -type f ! -path "./README.md" -print0 |
+              sort -z |
+              xargs -0 sha256sum
+          ) > "$src_manifest"
+
+          (
+            find books claims developer-texts dialogue entities games indexes mods sources topics -type f -print0 |
+              sed -z 's#^#./#' |
+              sort -z |
+              xargs -0 sha256sum
+          ) > "$dst_manifest"
+
+          src_count="$(wc -l < "$src_manifest" | tr -d ' ')"
+          dst_count="$(wc -l < "$dst_manifest" | tr -d ' ')"
+
+          # Normalize source paths so both manifests describe target-relative paths.
+          sed "s#  \./#  #" "$src_manifest" > "$src_manifest.norm"
+          sed "s#  \./#  #" "$dst_manifest" > "$dst_manifest.norm"
+
+          # Source manifest paths are already relative to the source root; target
+          # paths use the same layout.
+          if ! diff -u "$src_manifest.norm" "$dst_manifest.norm" > /tmp/tes-manifest.diff; then
+            {
+              echo "# TES full-copy audit"
+              echo
+              echo "- Status: FAILED"
+              echo "- Source commit: `a84d5adf3f7e21a89943c023620a81361cc2f85c`"
+              echo "- Source file count (excluding root README): $src_count"
+              echo "- Destination file count: $dst_count"
+              echo
+              echo "## Manifest diff"
+              echo '~~~diff'
+              cat /tmp/tes-manifest.diff
+              echo '~~~'
+            } > "$REPORT"
+            cat "$REPORT"
+            exit 1
+          fi
+
+          {
+            echo "# TES full-copy audit"
+            echo
+            echo "- Status: PASS"
+            echo "- Source repository: `unwit1/personal-agent-os`"
+            echo "- Source root: `knowledge/libraries/elder-scrolls/`"
+            echo "- Source commit: `a84d5adf3f7e21a89943c023620a81361cc2f85c`"
+            echo "- Source files copied (excluding source root README): $src_count"
+            echo "- Destination files audited: $dst_count"
+            echo "- SHA-256 manifest comparison: exact match"
+            echo "- Source root README retained as: `migrations/source-library-README.md`"
+            echo "- Agent OS source deletion: NOT PERFORMED"
+            echo
+            echo "The source library remains intact. Any deletion/deprecation must occur only after a separate post-migration repository audit confirms no TES knowledge remains stranded elsewhere in Agent OS."
+          } > "$REPORT"
+
+          cat "$REPORT"
+
+      - name: Remove checkout staging
+        shell: bash
+        run: rm -rf _agent_os
+
+      - name: Commit migrated library
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit."
+            exit 0
+          fi
+          git commit -m "Migrate full TES knowledge library from Agent OS"
+          git push origin HEAD:main
