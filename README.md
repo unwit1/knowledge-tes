@@ -19,4 +19,4 @@ Canonical, GitHub-browsable home for Elder Scrolls lore material used by writing
 Every imported item should retain its source, source URL or game/plugin origin when available, retrieval/extraction date, continuity, and confidence/status. Mod lore must not silently merge into Bethesda/ZeniMax continuity.
 
 ## Migration
-Initial material is being migrated from `unwit1/personal-agent-os/knowledge/libraries/elder-scrolls/`. Stable work IDs and source-specific witness/provenance data are preserved. Source files remain untouched until the new repository has been validated.
+Initial material is being migrated from `unwit1/personal-agent-os/knowledge/libraries/elder-scrolls/`. Stable work IDs and source-specific witness/provenance data are preserved. The initial corpus copy is complete: 4,924 files match source paths and blob hashes; the root README is intentionally rewritten. The source library was removed from Personal Agent OS main after the transfer at the user's request. Its audited source commit remains in Git history.

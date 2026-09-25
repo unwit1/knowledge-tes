@@ -1,54 +1,26 @@
 # TES migration audit checkpoint — 2026-09-25
 
 Source repository: `unwit1/personal-agent-os`
+Source commit audited: `f65994528a973a96823b5cbf55bde73265d1f9bc`
 Source root: `knowledge/libraries/elder-scrolls/`
-Source commit audited: `bbc03b590a666128c8f01009de73d7fecd691f21`
-
 Destination repository: `unwit1/knowledge-tes`
-Destination commit audited: `cb0b6c3b4e6bab530a45a2bcef61b074933d7e3e`
+Destination parent audited: `a8ab9d47d6624cdfe88deca22ec85f3d9b797ed7`
 
-## Integrity summary
+## Content-copy integrity
 
-- Source Elder Scrolls files: **4,925**
-- Exact path + blob SHA matches in destination: **252**
-- Missing from destination: **4,672**
-- Same-path content mismatches: **1**
-- Destination total files: **260**
+- Source files: **4,925**
+- Exact destination path + blob-SHA matches after batch 17: **4,924**
+- Missing source files: **0**
+- Same-path differences: **1**, the intentionally rewritten root `README.md`
+- Files imported in batch 17: **3,982**
+- Batch 17 hashes: all match their archived source blobs; see [the JSONL manifest](2026-09-25-batch-17.jsonl).
 
-The only same-path mismatch is `README.md`. This is intentional: the destination root README was rewritten to describe `knowledge-tes` as the canonical standalone library while preserving the migration/provenance rules.
+The destination root README is adapted for the standalone canonical library. All other source files are present at their corresponding paths with identical blob content, including compressed corpora.
 
-## Remaining source files by top-level area
+## Follow-up validation
 
-- `mods/`: **2,444**
-- `sources/`: **943**
-- `topics/`: **1,285**
+The full content inventory and blob-hash copy check passed. Internal-link normalization, representative retrieval/index queries, and broader semantic review are separate follow-up validation; this checkpoint does not claim those checks were run.
 
-Other source top-level areas are currently represented in the destination with exact matching blobs at this checkpoint.
+## Source state
 
-## Deletion gate
-
-**DO NOT delete, archive, or rewrite the Agent OS Elder Scrolls source library yet.**
-
-Deletion is blocked until all of the following pass:
-
-1. zero unexpected missing files;
-2. zero unexpected same-path hash mismatches;
-3. source record counts reconciled;
-4. relative/internal links audited after canonical path rewrites;
-5. stable IDs and work/witness relationships preserved;
-6. official, developer/obscure, and mod-continuity boundaries preserved;
-7. compressed/raw source blobs verified or intentionally re-homed;
-8. Agent OS references updated to point to `knowledge-tes`;
-9. retrieval/index behavior validated against representative lore queries;
-10. a final migration manifest records any intentional exclusions or transformed files.
-
-## Current migration strategy
-
-Continue copying non-destructively in incremental commits, prioritizing:
-1. human-browsable topic dossiers;
-2. source texts and provenance manifests;
-3. continuity-specific mod analysis and normalized records;
-4. compressed/raw bulk corpora;
-5. final path/reference normalization and Agent OS integration updates.
-
-No destructive source operation was performed in this pass.
+The source library was removed from the current Personal Agent OS main tree at the user's request after the transfer was staged. The audited source commit above remains in Git history for recovery.
