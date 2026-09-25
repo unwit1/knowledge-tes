@@ -1,0 +1,137 @@
+name: Bulk migrate TES knowledge
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout knowledge-tes
+        uses: actions/checkout@v4
+        with:
+          path: target
+          fetch-depth: 0
+
+      - name: Checkout pinned Agent OS source
+        uses: actions/checkout@v4
+        with:
+          repository: unwit1/personal-agent-os
+          ref: a84d5adf3f7e21a89943c023620a81361cc2f85c
+          path: source
+          fetch-depth: 1
+
+      - name: Copy Elder Scrolls library
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="source/knowledge/libraries/elder-scrolls"
+          DST="target"
+          rsync -a --exclude 'README.md' "$SRC/" "$DST/"
+          mkdir -p "$DST/migrations/source-snapshots"
+          cp "$SRC/README.md" "$DST/migrations/source-snapshots/elder-scrolls-README.md"
+
+      - name: Audit migrated bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, datetime
+
+          src = Path("source/knowledge/libraries/elder-scrolls")
+          dst = Path("target")
+          audit_json = dst / "migrations/2026-09-25-bulk-copy-audit.json"
+          audit_md = dst / "migrations/2026-09-25-bulk-copy-audit.md"
+
+          def digest(path: Path) -> str:
+              h = hashlib.sha256()
+              with path.open("rb") as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          rows = []
+          missing = []
+          mismatched = []
+          total_bytes = 0
+          for source_file in sorted(p for p in src.rglob("*") if p.is_file()):
+              rel = source_file.relative_to(src)
+              target_file = (
+                  dst / "migrations/source-snapshots/elder-scrolls-README.md"
+                  if rel.as_posix() == "README.md"
+                  else dst / rel
+              )
+              total_bytes += source_file.stat().st_size
+              source_sha = digest(source_file)
+              if not target_file.exists():
+                  missing.append(rel.as_posix())
+                  target_sha = None
+              else:
+                  target_sha = digest(target_file)
+                  if source_sha != target_sha:
+                      mismatched.append(rel.as_posix())
+              rows.append({
+                  "source_path": rel.as_posix(),
+                  "target_path": target_file.relative_to(dst).as_posix(),
+                  "bytes": source_file.stat().st_size,
+                  "sha256": source_sha,
+                  "target_sha256": target_sha,
+              })
+
+          result = {
+              "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "source_repository": "unwit1/personal-agent-os",
+              "source_commit": "a84d5adf3f7e21a89943c023620a81361cc2f85c",
+              "source_root": "knowledge/libraries/elder-scrolls",
+              "target_repository": "unwit1/knowledge-tes",
+              "source_file_count": len(rows),
+              "source_total_bytes": total_bytes,
+              "missing_count": len(missing),
+              "mismatch_count": len(mismatched),
+              "missing": missing,
+              "mismatched": mismatched,
+              "status": "PASS" if not missing and not mismatched else "FAIL",
+              "files": rows,
+              "source_deletion_performed": False,
+          }
+          audit_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+          audit_md.write_text(
+              "# TES bulk migration audit\n\n"
+              f"- Status: **{result['status']}**\n"
+              f"- Source: `unwit1/personal-agent-os@{result['source_commit']}`\n"
+              f"- Source root: `{result['source_root']}/`\n"
+              f"- Files checked: **{len(rows)}**\n"
+              f"- Bytes checked: **{total_bytes}**\n"
+              f"- Missing: **{len(missing)}**\n"
+              f"- Hash mismatches: **{len(mismatched)}**\n"
+              "- Source deletion performed: **No**\n\n"
+              "The source root README is preserved at "
+              "`migrations/source-snapshots/elder-scrolls-README.md`; all other files retain "
+              "their source-relative paths at repository root.\n",
+              encoding="utf-8",
+          )
+          if missing or mismatched:
+              raise SystemExit(f"Audit failed: missing={len(missing)} mismatched={len(mismatched)}")
+          print(f"PASS: {len(rows)} files, {total_bytes} bytes")
+          PY
+
+      - name: Commit validated migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit."
+          else
+            git commit -m "Bulk migrate and audit Elder Scrolls knowledge"
+            git push origin HEAD:main
+          fi
